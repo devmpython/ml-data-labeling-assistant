@@ -1,9 +1,6 @@
+pandas
+streamlit
+plotly
 langchain
 openai
-chromadb
-tiktoken
-pandas
 tabulate
-streamlit
-callbacks
-plotly

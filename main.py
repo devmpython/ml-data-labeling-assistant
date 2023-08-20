@@ -9,12 +9,12 @@ from langchain.llms import OpenAI
 import plotly.graph_objects as go
 from clear_state import StreamlitHelper
 
-st.set_page_config(page_title="Labeling machine", page_icon="🏷️", layout="centered", initial_sidebar_state="collapsed" )
+st.set_page_config(page_title="Time series data labeling assistant", page_icon="🏷️", layout="centered", initial_sidebar_state="collapsed" )
 
-"# 📈🏷️ Data Labeling machine powered by GPT text rules"
+"# 📈🏷️ Time series data labeling assistant"
 
 """
-This Streamlit app showcases a LangChain agent that labels the csv timeseries data based on the rules provied by the user.
+This Streamlit app showcases a LangChain agent that labels the CSV timeseries data based on the rules provied by the user.
 """
 
 # ----- SIDE BAR -----
@@ -22,9 +22,6 @@ This Streamlit app showcases a LangChain agent that labels the csv timeseries da
 user_openai_api_key = st.sidebar.text_input(
     "OpenAI API Key", type="password", help="Set this to run your own custom questions."
 )
-
-# if user_openai_api_key:
-#     os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", user_openai_api_key)
 
 expand_new_thoughts = st.sidebar.checkbox(
     "Expand New Thoughts",
@@ -41,24 +38,24 @@ collapse_completed_thoughts = st.sidebar.checkbox(
 
 max_thought_containers = st.sidebar.number_input(
     "Max Thought Containers",
-    value=4,
+    value=6,
     min_value=1,
     help="Max number of completed thoughts to show. When exceeded, older thoughts will be moved into a 'History' expander.",
 )
 
+df = pd.DataFrame()
 
+DT_COLUMN_HEADER_NAME = "datetime"
 # --- DATA LOADER AND DISPLAY---
-
 
 @st.cache_data
 def load_data_to_dataframe(uploaded_file):
-    bytes_data = uploaded_file.getvalue()
-    stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
-    string_data = stringio.read()
     df = pd.read_csv(uploaded_file)
     return df
+
 # Dsiplay the data
 st.subheader("#1 Upload a file")
+st.write("You have to use a CSV file with one column 'datetime' in datetime format (e.g. '2015-08-01 00:00:28') for all measurements.",) 
 uploaded_file = st.file_uploader("")
 if uploaded_file is not None:
     df = load_data_to_dataframe(uploaded_file=uploaded_file)
@@ -68,10 +65,11 @@ if uploaded_file is not None:
         st.subheader("Here is your data as line charts per each column:")
         for column in df.columns:
             st.subheader(column)
-            st.line_chart(df, x="time", y=column)
+            st.line_chart(df, x=DT_COLUMN_HEADER_NAME, y=column)
 
 
 st.divider()
+
 # --- RULES FORM ---
 # Initialize session state variables if they don't exist
 if 'text_list' not in st.session_state:
@@ -107,8 +105,8 @@ st.divider()
 
 
 def build_prompt(rules):
-    base_prompt = "You are data labeling agent for IoT data.\
-        You are given a set of rules to label the data.\
+    base_prompt = "You are data labeling agent for IoT data (we have one or more data columns).\
+        You are given a set of rules to label the data.\n\
         You have to achieve following tasks:\n\
         1. Detect the timeframes of anomalies in the data.\
         Based on the provideded rules your task is to detect the timeframes of anomalies.Start datetime and End datetime\
@@ -119,9 +117,11 @@ def build_prompt(rules):
         DO NOT OUTPUT ANYTHING ELSE BUT THE JSON.\
         So that it takes following strucutre if there is more than one anomaly:\n\
         [\
-        {\"start_time\": \"2023-08-19 10:05\", \"end_time\": \"2023-08-19 10:10\"},\
-        {\"start_time\": \"2023-08-19 10:20\", \"end_time\": \"2023-08-19 10:22\"}\
+        {\"start_time\": \"2023-08-19 10:05:00\", \"end_time\": \"2023-08-19 10:10:00\"},\
+        {\"start_time\": \"2023-08-19 10:20:00\", \"end_time\": \"2023-08-19 10:22:00\"}\
         ]\n\
+        Do not output a variable name but a raw JSON data.\
+        Never print data frames values or lists from pandas as output.\
         Here is a list of rules you have to follow:\n"
 
 
@@ -151,22 +151,24 @@ def get_pandas_agent():
 def plot_with_highlight(df, column):
     # Create a basic line chart
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['time'], y=df[column], mode='lines'))
+    fig.add_trace(go.Scatter(x=df[DT_COLUMN_HEADER_NAME], y=df[column], mode='lines'))
 
     # Add shaded region where Label is 1
     shape_dicts = []
     for i in range(1, len(df)):
         if df['label'].iloc[i] == 1:
             shape_dicts.append({'type': 'rect', 'xref': 'x', 'yref': 'paper',
-                                'x0': df['time'].iloc[i - 1], 'y0': 0,
-                                'x1': df['time'].iloc[i], 'y1': 1,
+                                'x0': df[DT_COLUMN_HEADER_NAME].iloc[i - 1], 'y0': 0,
+                                'x1': df[DT_COLUMN_HEADER_NAME].iloc[i], 'y1': 1,
                                 'fillcolor': '#fc7474', 'opacity': 0.5, 'line': {'width': 0}
                                })
     fig.update_layout(shapes=shape_dicts)
     
     return fig
 
-df = load_data_to_dataframe(uploaded_file=uploaded_file)
+if uploaded_file is not None:
+    df = load_data_to_dataframe(uploaded_file=uploaded_file)
+
 if StreamlitHelper.clear_container(submit_clicked):
     res = results_container.container()
     streamlit_handler = StreamlitCallbackHandler(
@@ -177,7 +179,6 @@ if StreamlitHelper.clear_container(submit_clicked):
     )
     agent = get_pandas_agent()
     anomaly_answer = agent.run(prompt, callbacks=[streamlit_handler])
-    anomaly_answer = "[{\"start_time\": \"2015-08-01 00:05:29\", \"end_time\": \"2015-08-01 00:05:59\"}]"
     st.write(f"{anomaly_answer}")
     anomaly_answer_to_json = json.loads(anomaly_answer)
     time_data_list = pd.read_json(anomaly_answer)
@@ -185,9 +186,9 @@ if StreamlitHelper.clear_container(submit_clicked):
     for _, time_data in time_data_list.iterrows():
         start_time = pd.to_datetime(time_data['start_time'])
         end_time = pd.to_datetime(time_data['end_time'])
-        df['time'] = pd.to_datetime(df['time'])
+        df[DT_COLUMN_HEADER_NAME] = pd.to_datetime(df[DT_COLUMN_HEADER_NAME])
         df['label'] = 0
-        df.loc[(df['time'] >= start_time) & (df['time'] <= end_time), 'label'] = 1
+        df.loc[(df[DT_COLUMN_HEADER_NAME] >= start_time) & (df[DT_COLUMN_HEADER_NAME] <= end_time), 'label'] = 1
 
         
         st.subheader("Here is your data displayed in a table with extra label column:")
