@@ -23,7 +23,8 @@ user_openai_api_key = st.sidebar.text_input(
     "OpenAI API Key", type="password", help="Set this to run your own custom questions."
 )
 
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", user_openai_api_key)
+# if user_openai_api_key:
+#     os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", user_openai_api_key)
 
 expand_new_thoughts = st.sidebar.checkbox(
     "Expand New Thoughts",
@@ -140,7 +141,7 @@ results_container = st.empty()
 
 def get_pandas_agent():
     return create_pandas_dataframe_agent(
-        OpenAI(temperature=0),
+        OpenAI(temperature=0, openai_api_key=user_openai_api_key),
         df,
         verbose=True,
         agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
