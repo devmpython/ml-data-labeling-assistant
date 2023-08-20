@@ -1,3 +1,4 @@
+import os
 import json
 import pandas as pd
 import streamlit as st
@@ -22,15 +23,7 @@ user_openai_api_key = st.sidebar.text_input(
     "OpenAI API Key", type="password", help="Set this to run your own custom questions."
 )
 
-
-if user_openai_api_key:
-    openai_api_key = user_openai_api_key
-    enable_custom = True
-else:
-    openai_api_key = "not_supplied"
-    enable_custom = False
-
-
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", user_openai_api_key)
 
 expand_new_thoughts = st.sidebar.checkbox(
     "Expand New Thoughts",
