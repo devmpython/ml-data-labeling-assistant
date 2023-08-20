@@ -6,3 +6,4 @@ pandas
 tabulate
 streamlit
 callbacks
+plotly
